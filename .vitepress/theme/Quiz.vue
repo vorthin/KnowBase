@@ -7,6 +7,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import rawData from '../quiz-data.json'
 import { choiceAnswerText, displayChoiceOptions } from './quiz-choice.mjs'
+import { blankAnswerText, blankBoxCount, checkBlankAnswer } from './quiz-blank.mjs'
 
 const QUESTIONS = Array.isArray(rawData) ? rawData : rawData.questions || []
 const STATS_KEY = 'kb-quiz-stats-v1'
@@ -114,15 +115,6 @@ function shuffle(arr) {
   return a
 }
 
-/** 全角转半角 + 去空白标点，用于填空题比较 */
-function normalize(value) {
-  return String(value || '')
-    .replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
-    .replace(/\u3000/g, ' ')
-    .replace(/[\s，。、；：""''（）()【】\[\]《》,.;:!?！？"'`~·\-—_/\\|]/g, '')
-    .toLowerCase()
-}
-
 function typeLabel(type) {
   return { choice: '选择题', blank: '填空题', qa: '问答题' }[type] || type
 }
@@ -226,7 +218,8 @@ function enterQuestion() {
   if (q.type === 'choice') {
     displayedOptions.value = displayChoiceOptions(q)
   } else if (q.type === 'blank') {
-    blankInputs.value = new Array(Math.max(q.answer.length, 1)).fill('')
+    // 输入框数量按题干空位决定：单空多候选只给一个框，任填其一
+    blankInputs.value = new Array(blankBoxCount(q.question, q.answer)).fill('')
   }
   phase.value = 'answering'
 }
@@ -321,8 +314,7 @@ function submitChoice() {
 
 function submitBlank() {
   const q = current.value
-  const ok = q.answer.every((ans, i) => normalize(blankInputs.value[i]) === normalize(ans))
-  record(ok)
+  record(checkBlankAnswer(q.question, q.answer, blankInputs.value))
 }
 
 function selfAssess(ok) {
@@ -343,7 +335,7 @@ function optionState(option) {
 function answerText(q) {
   if (!q) return ''
   if (q.type === 'choice') return choiceAnswerText(q)
-  if (q.type === 'blank') return q.answer.join(' ｜ ')
+  if (q.type === 'blank') return blankAnswerText(q.question, q.answer)
   return q.answer || '（见解析）'
 }
 
